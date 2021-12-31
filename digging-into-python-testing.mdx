@@ -1,0 +1,197 @@
+---
+title: Digging into Python testing
+date: '2021-12-31'
+tags: ['Software', 'Python', 'Testing', 'Developer Best Practices', 'Tincre Dev']
+draft: false
+summary: Python automated testing in brief and a few principles to keep in mind.
+authors: ['ellali']
+images: ['/static/images/blue-screen-o-death.jpg']
+layout: PostLayout
+---
+
+<Image
+  src="/static/images/blue-screen-o-death.jpg"
+  alt="Your computer has crashed because tests weren't written!"
+  height={1000}
+  width={2000}
+/>
+
+As a financial mathematics graduate student at the University of Chicago, I have judiciously learned to check my work at the expense of many nights of sleep.
+
+But when I write software things are different: I get to check my work before I even start!
+
+## Check your work with testing
+
+Right now at Tincre I am adding tests for a basic financial pipeline to learn our workflow development stack. With the help of [_The Hitchiker's Guide to Python_](https://docs.python-guide.org/), I will review testing several testing principles. In the sections below I'll write a variety of tests covering a very simple module, `reprice.py`, availab e via Github (link provided below).
+
+### Contents
+
+- [Use your tools](#testing-tools-provide-development-efficiency)
+- [Small pieces](#code-should-be-considered-broken-if-not-tested)
+- [Fast tests](#fast-tests-are-the-core)
+
+### But first, why testing?
+
+Testing is the fundamental step to prove the functionality of the code and communicate the functionality of the code to other developers. In consequence, learning how to use Python's testing tools correctly likely shortens developer time spent on testing. Lastly, tests help us developers pay attention to catch bugs in code early, so that quality code is written more quickly.
+
+So let's dive in!
+
+### Testing tools provide development efficiency
+
+One of the reasons we often say Python is powerful is because of its expressable test automation. It has different many tools to help us quickly figure out problems in our code, based on our application requirements and approaches to development.
+
+#### Unittest
+
+Unittest is the standard libary tool for testing. It is included in the Python standard library and guides the developer through an imperative style of testing. We can quickly catch modifications parts of well-tested code.
+
+A feature should be noticed: `TestCase`. The class is used to create new test cases and help check for responses to a set of inputs.
+
+```python
+import unittest
+
+class TestReprice(unittest.TestCase):
+
+    def test__set_initial_value(self):
+      reprice._get_returns(reprice_dataframe)
+      reprice._set_initial_value(reprice_dataframe, 100, "reprice")
+      self.assertEqual(reprice_dataframe["reprice"][0],100)
+```
+
+Sometimes Unittest is not as quick as we expect and I recommend using Py.test instead. More on that below.
+
+#### doctest
+
+Though `doctest` is less specific than Unittest and neglects some edge cases, it is a valuable way to assert primary code functionality, _right inline within docstrings!_
+
+How does `doctest` do this? It searches for pieces of text that look like interactive Python sessions in docstrings and then execute those sessions with Python to verify that they work correctly.
+
+`doctest` can be alternatively used to check whether the documentation matches the code.
+
+The simplest way to use `doctest` is to implement it at the end of a module：
+
+```python
+"""multiply.py"""
+
+def multiply_int(x: int, y: int) -> int:
+    """
+    >>> multiply_int(10, 1)
+    10
+    """
+    return x * y
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
+```
+
+We can run `python multiply.py` to execute DocTest. If the details of implemented examples do not show up, try `python multiply.py -v` to see a summary.
+
+#### pytest
+
+**Installation**: `pip install pytest`
+
+According to the [pytest documentation](https://https://docs.pytest.org/en/6.2.x/), some strengths:
+
+- Detailed info covering failing assert statements
+- Auto-discovery of test modules and functions
+- Runs unittest and nose test suites out of the box
+- Rich plugin architecture
+
+Its simple syntax is also what makes the Python community love it!
+
+```python
+import pandas as pd
+import reprice
+
+def test_reprice(reprice_dataframe):
+    ndf = reprice.reprice(reprice_dataframe, 200)
+    assert isinstance(ndf, pd.DataFrame)
+    assert ndf["X"][0] == reprice_dataframe["X"][0]
+```
+
+Some tricks on quickly powering-up with pytest:
+
+- Use `-k` to execute specific tests, e.g. `pytest -k "my-test-function-name"`.
+- Use `pyproject.toml` to setup tests. When just typing the `pytest`, you can set the command and add markers. You need to add a block `[tool.pytest.ini_options]`. See [the docs](https://docs.pytest.org/en/6.2.x/customize.html?highlight=ini_options#pyproject-toml).
+
+#### What are the significant differences among these tests?
+
+- pytest is easier than unittest for beginners
+- pytest can be used for unit tests and for more advanced and application side of tests.
+
+From my perspective, I would use pytest in most circumstances!
+
+### Code should be considered broken if not tested
+
+It is always easier for a new programmer to first touch on the part of the codes and prove it correct. Essentially, we focus on the correctness of input and output, especially types and values.
+
+One crucial point: don't forget to include earlier pieces on testing if the function relates to them, though your tests should be idempotent.
+
+#### Types: assertions using `isinstance` or `is`
+
+Sometimes we want to input a dataframe into the function. However, when we implement it, we end up with a Series object which, different from what we expected (a DataFrame object). We definitely would like to check the type before the error shows up in our code.
+
+For example:
+
+```python
+def test_reprice(reprice_dataframe):
+    ndf = reprice.reprice(reprice_dataframe, 200)
+    assert isinstance(ndf, pd.DataFrame)
+    assert ndf["X"][0] == reprice_dataframe["X"][0]
+    assert "reprice" in list(ndf)
+```
+
+#### Values: assertions using `==` or similar
+
+Values are also crucial. We need first to consider the validity of the datasets. Think of a negative stock price that appeared in the dataset. Is there something wrong? Then, if the dataset is right, how about the outputs? Any constraints? What about edge cases?
+
+```python
+
+def test__propogate_initial_value(reprice_dataframe):
+    '''Remember to include the previous pieces which have been tested since they are related.
+    '''
+    reprice._get_returns(reprice_dataframe)
+    reprice._set_initial_value(reprice_dataframe, 100, "reprice")
+    reprice._propogate_initial_value(reprice_dataframe, "reprice")
+    ind = np.random.randint(0, len(reprice_dataframe))
+    assert reprice_dataframe["reprice"][ind] > 0
+```
+
+Above I do a basic assertion that the price should be above 0, since we shouldn't have negative stock prices, at least for now (in 2021). We like to call
+these types of assertions _sanity checks_.
+
+### Fast tests are the core!
+
+Time is money. And even money costs money. And this is not just true for the startup like [Tincre](https://tincre.com) but for every company and each one of us.
+
+In engineering, if we can chunk some big data structure into several separate tests, it would be far more efficient to execute as needed.
+
+Additionally, we should often think of the execution time for each function. Understanding the difference between iterator and generator can help you gain more sense of it for many data structures in Python. Other examples include the use of decorators. Take a simple example highlighting `list`:
+
+```python
+def test__get_returns(reprice_dataframe):
+    reprice_dataframe["Y"][0:3] = [0, 0, 1]
+    reprice._get_returns(reprice_dataframe)
+    assert "returns" in list(reprice_dataframe)
+
+```
+
+Here, use `list()` to list down the columns of the dataframe. If the dataset is large, it might be better to use `df.keys()`, which shortens the runtime as a Pandas DataFrame reference to its built-in `Index` object. But this is a nice example of leveraging Python: with a simple dataframe, `list` costs nothing more and is more expressive. Plus, we have the choice of a quick and effortless refactor later, if the data expectations were to grow.
+
+### Conclusion
+
+We often say testing is important. Why? Without automated tests we can only _hope_ that our software can function properly as we expect. But it is nearly impossible for a developer to check all of the code by sight for even reasonably small code bases. Just imagine what happens when you have millions of lines of code, external upstream dependencies, and hundreds of production applications in service.
+
+Python tools, like `pytest`, are helpful in ensuring we deliver top-quality software to clients.
+
+We reviewed Unittest, `doctest`, and pytest. But there are still plenty of tools built up by the specialists. We can decide which one to use based on our needs.
+
+It is always easy to start looking at small pieces on your codes. Simply testing on their types and values can ensure correctness to some extent.
+
+We should also emphasize execution speed and simplicity when writing tests. The complexity of testing does not equal quality. Effective testing would shorten both development time and the costs of consuming resources to run tests.
+
+I hope you found this insightful.
+
+You can grab the code used from our [Github here](https://github.com/Tincre/technical-content/tree/master/digging-into-python-testing).
+
+<BlogNewsletterForm />
